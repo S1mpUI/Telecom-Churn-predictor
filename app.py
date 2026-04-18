@@ -1,49 +1,37 @@
 import streamlit as st
-import tensorflow as tf
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, decode_predictions, preprocess_input
-from tensorflow.keras.preprocessing import image
-import numpy as np
-from PIL import Image
+import pandas as pd
+import joblib
 
-# 1. Setting the web application
-st.set_page_config(page_title="Image Classifier", page_icon="📸")
-st.title("📸 AI Image Classifier (MobileNetV2)")
-st.write("Upload an image (.jpg, .jpeg, .png) and the AI will predict what it is!")
+# Load the trained model and scaler
+model = joblib.load('best_churn_model.pkl')
+scaler = joblib.load('scaler.pkl')
 
-# 2. setting cache
-@st.cache_resource
-def load_model():
-    return MobileNetV2(weights="imagenet")
+st.title("📊 Telecom Customer Churn Predictor")
+st.markdown("Business Data Analytics in Practice - Enter customer details below to predict churn probability.")
 
-# (1) load model
-model = load_model()
+st.sidebar.header("Customer Information")
+age = st.sidebar.slider("Age", 18, 100, 30)
+monthly_bill = st.sidebar.number_input("Monthly Bill ($)", min_value=0.0, value=50.0)
+usage_gb = st.sidebar.number_input("Total Data Usage (GB)", min_value=0.0, value=20.0)
+service_calls = st.sidebar.slider("Customer Service Calls", 0, 10, 1)
 
-# 3. upload file
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+if st.sidebar.button("Predict Churn"):
+    # Prepare input data
+    input_data = pd.DataFrame({
+        'Age': [age],
+        'Monthly_Bill': [monthly_bill],
+        'Total_Usage_GB': [usage_gb],
+        'Customer_Service_Calls': [service_calls]
+    })
 
-if uploaded_file is not None:
-    img = Image.open(uploaded_file)
-    st.image(img, caption='Uploaded Image', use_container_width=True)
+    # Scale and predict
+    input_scaled = scaler.transform(input_data)
+    prediction = model.predict(input_scaled)[0]
 
-    st.write("🔄 Classifying...")
-
-    # 4. preprocess
-    img_resized = img.resize((224, 224))
-    x = image.img_to_array(img_resized)
-    x = np.expand_dims(x, axis=0)
-    x = preprocess_input(x)
-
-    # 5. Prediction
-    # (1)
-    preds = model.predict(x, verbose=0)
-    # (2)
-    top_preds = decode_predictions(preds, top=3)[0]
-
-    # 6. Show result
-    st.subheader("Predictions:")
-    for i, pred in enumerate(top_preds):
-        class_name = pred[1].replace('_', ' ').title()
-        confidence = pred[2] * 100
-
-        st.write(f"**{i+1}. {class_name}** — {confidence:.2f}%")
-        st.progress(int(confidence))
+    st.subheader("Prediction Result")
+    if prediction == 1:
+        st.error("⚠️ High Risk: This customer is likely to CHURN.")
+        st.write("Recommendation: Offer a personalized discount or reach out to resolve any ongoing issues.")
+    else:
+        st.success("✅ Safe: This customer is likely to STAY.")
+        st.write("Recommendation: Continue standard marketing engagement.")
